@@ -1,68 +1,79 @@
-# x1_predict.py
-
 import os
+import uuid
 from datetime import datetime
+from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import pipeline
 from supabase import create_client, Client
 import uvicorn
-from typing import List
 from dotenv import load_dotenv
 
-# === Load .env file ===
+# === Load environment variables from .env ===
 load_dotenv()
 
-# === ENV VARS ===
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("Missing Supabase credentials in environment variables.")
 
-# === SUPABASE CLIENT ===
+# === Supabase client setup ===
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# === FASTAPI APP ===
+# === FastAPI app initialization ===
 app = FastAPI()
 
-# === MODELS ===
+# === Response model definition ===
 class Prediction(BaseModel):
     asset: str
     sentiment: str
     score: float
     timestamp: str
+    loop_id: str
+    source: str
+    tags: List[str]
+    raw_prompt: str
 
-# === PREDICTOR ===
+# === Load FinBERT model ===
 classifier = pipeline("sentiment-analysis", model="ProsusAI/finbert")
 
 def predict_sentiment(text: str):
-    result = classifier(text)[0]
-    return result  # {'label': 'Positive', 'score': 0.98}
+    return classifier(text)[0]
 
 def run_prediction_loop(assets: List[str]):
     results = []
+    loop_id = str(uuid.uuid4())  # Unique ID for this prediction run
+
     for asset in assets:
         prompt = f"Latest financial news and analysis for {asset}."
         sentiment = predict_sentiment(prompt)
+
         result = {
             "asset": asset,
             "sentiment": sentiment["label"],
             "score": round(sentiment["score"], 3),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "loop_id": loop_id,
+            "source": "FinBERT",
+            "tags": ["ai", "finance", asset.lower()],
+            "raw_prompt": prompt
         }
+
         results.append(result)
-        supabase.table("predictions").insert(result).execute()
+
+        try:
+            supabase.table("predictions").insert(result).execute()
+        except Exception as e:
+            print(f"❌ Supabase insert failed for {asset}:", e)
+
     return results
 
-# === ENDPOINT ===
 @app.get("/predict", response_model=List[Prediction])
 def predict():
     assets = ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
-    results = run_prediction_loop(assets)
-    return results
+    return run_prediction_loop(assets)
 
-# === CLI RUNNER ===
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("x1_predict:app", host="0.0.0.0", port=8000, reload=True)
 
