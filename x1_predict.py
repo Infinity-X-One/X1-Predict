@@ -1,32 +1,29 @@
+import os
+from datetime import datetime
 from fastapi import FastAPI
-from api import predict, feedback, dashboard, agent, replay, replay_train
+from pydantic import BaseModel
+from transformers import pipeline
+from supabase import create_client
+from typing import List
+from dotenv import load_dotenv
+from uuid import uuid4
+import requests
 
-app = FastAPI(
-    title="X1 Predict :: Autonomous AI Financial Engine",
-    description="Recursive, agentic backend for financial predictions, feedback scoring, and strategy optimization.",
-    version="1.2.1"
-)
+# === Load ENV ===
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Modular route includes
+# === FastAPI App ===
+app = FastAPI()
+
+# === Import Routers ===
+from api import predict, feedback, dashboard, agent, metrics  # INCLUDE THIS LINE
+
 app.include_router(predict.router)
 app.include_router(feedback.router)
 app.include_router(dashboard.router)
 app.include_router(agent.router)
-app.include_router(replay.router)
-app.include_router(replay_train.router)
-
-@app.get("/")
-def root():
-    return {
-        "status": "X1 Predict backend is live.",
-        "version": "1.2.1",
-        "endpoints": [
-            "/predict",
-            "/feedback",
-            "/predict/replay",
-            "/replay/train",
-            "/agent/strategy",
-            "/dashboard"
-        ]
-    }
+app.include_router(metrics.router)  # REGISTER METRICS ROUTER HERE
 
