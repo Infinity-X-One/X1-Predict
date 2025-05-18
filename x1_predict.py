@@ -1,91 +1,61 @@
-import os
-import uuid
-from datetime import datetime
-from typing import List
-
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from transformers import pipeline
+from api import dashboard
+from fastapi import APIRouter, Query
 from supabase import create_client
 from dotenv import load_dotenv
+import os
 
-# === Load environment variables ===
+router = APIRouter()
 load_dotenv()
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Missing Supabase credentials in .env")
-
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# === FastAPI App ===
-app = FastAPI()
+@router.get("/dashboard/summary")
+def dashboard_summary():
+    # Fetch all predictions
+    pred_res = supabase.table("predictions").select("*").execute()
+    total_preds = len(pred_res.data) if pred_res.data else 0
 
-# === Models ===
-class Prediction(BaseModel):
-    asset: str
-    sentiment: str
-    score: float
-    timestamp: str
-    loop_id: str
-    source: str
-    tags: List[str]
-    raw_prompt: str
+    # Fetch all feedback scores
+    fb_res = supabase.table("feedback_score").select("*").execute()
+    total_fb = len(fb_res.data) if fb_res.data else 0
+    correct = sum(1 for row in fb_res.data if row.get("is_correct"))
+    accuracy = round((correct / total_fb) * 100, 2) if total_fb else 0
 
-# === Load model ===
-classifier = pipeline("sentiment-analysis", model="ProsusAI/finbert")
+    # Build summary response
+    return {
+        "total_predictions": total_preds,
+        "total_scored": total_fb,
+        "accuracy_percent": accuracy,
+        "last_loop_id": pred_res.data[-1]["loop_id"] if total_preds else None
+    }
 
-# === Utility ===
-def get_strategy_threshold():
-    result = supabase.table("strategy_config").select("*").order("timestamp", desc=True).limit(1).execute()
-    if result.data and "confidence_threshold" in result.data[0]:
-        return float(result.data[0]["confidence_threshold"])
-    return 0.8  # default fallback
+@router.get("/dashboard/assets")
+def asset_stats(asset: str = Query(..., description="Asset symbol (e.g., AAPL)")):
+    # Fetch predictions for the asset
+    preds = supabase.table("feedback_score").select("*").eq("asset", asset).execute()
+    total = len(preds.data)
+    correct = sum(1 for row in preds.data if row.get("is_correct"))
+    accuracy = round((correct / total) * 100, 2) if total else 0
 
-# === Main prediction logic ===
-def predict_sentiment(text: str):
-    result = classifier(text)[0]
-    return result  # {'label': 'Positive', 'score': 0.98}
+    return {
+        "asset": asset.upper(),
+        "total_predictions": total,
+        "accuracy_percent": accuracy,
+        "last_prediction": preds.data[0] if preds.data else None
+    }
 
-def run_prediction_loop(assets: List[str]):
-    loop_id = str(uuid.uuid4())
-    threshold = get_strategy_threshold()
-    results = []
-
-    for asset in assets:
-        prompt = f"Latest financial news and analysis for {asset}."
-        sentiment = predict_sentiment(prompt)
-
-        if sentiment["score"] >= threshold:
-            prediction = {
-                "asset": asset,
-                "sentiment": sentiment["label"].lower(),
-                "score": round(sentiment["score"], 4),
-                "timestamp": datetime.utcnow().isoformat(),
-                "loop_id": loop_id,
-                "source": "FinBERT",
-                "tags": ["ai", "finance", asset.lower()],
-                "raw_prompt": prompt
-            }
-            results.append(prediction)
-            supabase.table("predictions").insert(prediction).execute()
-
-    # Trigger feedback scoring for the new loop
-    try:
-        os.system("python feedback_score.py")
-    except Exception as e:
-        print(f"Feedback scoring failed: {e}")
-
-    return results
-
-# === Routes ===
-@app.get("/predict", response_model=List[Prediction])
-def predict():
-    assets = ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
-    return run_prediction_loop(assets)
-
-# === Routers (step 3.2) ===
-from api import feedback, adapt, agent
-app.include_router(feedback.router)
-app.include_router(adapt.router)
-app.include_router(agent.router)
+@router.get("/dashboard/loops")
+def loop_history(limit: int = 5):
+    # Fetch recent prediction loop IDs
+    loops = (
+        supabase.table("predictions")
+        .select("loop_id, timestamp")
+        .order("timestamp", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    # De-duplicate by loop_id
+    loop_ids = list({row["loop_id"]: row for row in loops.data}.values())
+    return loop_ids

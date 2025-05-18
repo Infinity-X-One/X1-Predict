@@ -3,19 +3,14 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from supabase import create_client
 from dotenv import load_dotenv
-from dateutil import parser
 import uuid
+from dateutil import parser
 
 # === Load environment variables ===
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# === Determine interval dynamically (safe for weekends) ===
-def get_interval():
-    now = datetime.utcnow()
-    return '1m' if now.weekday() < 5 else '5m'  # Weekday = 0–4, Weekend = 5–6
 
 # === Scoring Logic ===
 def evaluate_prediction(pred):
@@ -25,61 +20,56 @@ def evaluate_prediction(pred):
     prediction_time = parser.isoparse(pred['timestamp'])
 
     try:
-        interval = get_interval()
-        symbol = asset.upper()
+        # Download recent price data
         df = yf.download(
-            tickers=symbol,
-            interval=interval,
+            tickers=asset.upper(),
+            interval='5m',
             start=prediction_time - timedelta(minutes=1),
-            end=prediction_time + timedelta(minutes=16)
+            end=prediction_time + timedelta(minutes=16),
+            progress=False
         )
 
         if df.empty or len(df) < 2:
-            print(f"⚠️ Not enough data for {symbol} at {prediction_time}")
+            print(f"[WARNING] Not enough data for {asset} at {prediction_time}")
             return None
 
         start_price = df['Close'].iloc[0]
         later_price = df['Close'].iloc[-1]
         percent_change = ((later_price - start_price) / start_price) * 100
 
-        actual_sentiment = (
-            'positive' if percent_change > 0.2
-            else 'negative' if percent_change < -0.2
-            else 'neutral'
-        )
+        # Classify actual result
+        if percent_change > 0.2:
+            actual_sentiment = 'positive'
+        elif percent_change < -0.2:
+            actual_sentiment = 'negative'
+        else:
+            actual_sentiment = 'neutral'
 
         is_correct = (predicted_sentiment == actual_sentiment)
 
         feedback = {
             "id": str(uuid.uuid4()),
             "asset": asset,
-            "loop_id": pred.get('loop_id'),
+            "loop_id": pred.get("loop_id"),
             "predicted_sentiment": predicted_sentiment,
             "predicted_score": predicted_score,
             "prediction_time": prediction_time.isoformat(),
             "actual_price_change": round(percent_change, 4),
             "actual_sentiment": actual_sentiment,
             "is_correct": is_correct,
-            "confidence_score": round(predicted_score * (1 if is_correct else -1), 4),
+            "confidence_score": round(predicted_score * (1 if is_correct else -1), 4)
         }
 
-        print(f"✅ {asset}: Prediction was {'correct' if is_correct else 'wrong'} ({percent_change:.2f}%)")
+        print(f"[INFO] {asset}: Prediction {'correct' if is_correct else 'wrong'} ({percent_change:.2f}%)")
         return feedback
 
     except Exception as e:
-        print(f"❌ Error scoring {asset}: {e}")
+        print(f"[ERROR] Scoring failed for {asset}: {e}")
         return None
 
-# === Main Execution with 15-Minute Cutoff ===
+# === Main Runner ===
 def run_feedback_analysis():
-    cutoff_time = datetime.utcnow() - timedelta(minutes=16)
-
-    res = supabase.table("predictions") \
-        .select("*") \
-        .lt("timestamp", cutoff_time.isoformat()) \
-        .order("timestamp", desc=True) \
-        .limit(10) \
-        .execute()
+    res = supabase.table("predictions").select("*").order("timestamp", desc=True).limit(10).execute()
 
     for pred in res.data:
         feedback = evaluate_prediction(pred)
