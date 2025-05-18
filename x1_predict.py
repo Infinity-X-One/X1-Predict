@@ -1,31 +1,30 @@
 import os
+import uuid
+import requests
 from datetime import datetime
+from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import pipeline
-from supabase import create_client, Client
-from typing import List
 from dotenv import load_dotenv
-from agents.ExplorerAgent import build_prompts
+from supabase import create_client, Client
 
-# === Load .env ===
+# === Load Environment Variables ===
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Missing Supabase credentials in environment variables.")
+    raise ValueError("Missing Supabase credentials.")
 
-# === Supabase Client ===
+# === Initialize Supabase + App ===
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# === FastAPI App ===
 app = FastAPI()
 
-# === FinBERT Predictor ===
+# === FinBERT Classifier ===
 classifier = pipeline("sentiment-analysis", model="ProsusAI/finbert")
 
-# === Pydantic Schema ===
+# === Output Model ===
 class Prediction(BaseModel):
     asset: str
     sentiment: str
@@ -36,30 +35,29 @@ class Prediction(BaseModel):
     tags: List[str]
     raw_prompt: str
 
-# === Assets to Predict ===
-def get_assets():
-    try:
-        with open("adaptive_assets.json", "r") as f:
-            assets = [x["asset"] for x in json.load(f)]
-            return assets if assets else ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
-    except:
-        return ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
-
-# === Predict Function ===
+# === Prediction Function ===
 def predict_sentiment(text: str):
-    result = classifier(text)[0]
-    return result  # {'label': 'positive', 'score': 0.98}
+    return classifier(text)[0]  # returns {'label': 'Positive', 'score': 0.98}
 
-# === Prediction Loop ===
-def run_prediction_loop():
-    assets = get_assets()
-    prompts = build_prompts(assets)
-    loop_id = str(datetime.utcnow().timestamp()).replace(".", "")
+# === Adaptive Prediction Loop ===
+def run_prediction_loop(assets: List[str]):
+    # 1. Get strategy
+    try:
+        strategy = requests.get("http://127.0.0.1:8000/agent/strategy").json()
+        threshold = strategy.get("new_threshold", 0.85)
+    except Exception:
+        threshold = 0.85
+
+    loop_id = str(uuid.uuid4())
     results = []
 
     for asset in assets:
-        prompt = prompts.get(asset, f"Latest financial news and analysis for {asset}.")
+        prompt = f"Latest financial news and analysis for {asset}."
         sentiment = predict_sentiment(prompt)
+
+        if sentiment["score"] < threshold:
+            continue  # Skip if below threshold
+
         result = {
             "asset": asset,
             "sentiment": sentiment["label"].lower(),
@@ -70,6 +68,7 @@ def run_prediction_loop():
             "tags": ["ai", "finance", asset.lower()],
             "raw_prompt": prompt
         }
+
         results.append(result)
         supabase.table("predictions").insert(result).execute()
 
@@ -78,11 +77,8 @@ def run_prediction_loop():
 # === API Endpoint ===
 @app.get("/predict", response_model=List[Prediction])
 def predict():
-    return run_prediction_loop()
+    assets = ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
+    return run_prediction_loop(assets)
 
-# === Local Runner ===
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("x1_predict:app", host="0.0.0.0", port=8000, reload=True)
 
 
