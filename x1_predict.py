@@ -1,61 +1,87 @@
-from api import dashboard
-from fastapi import APIRouter, Query
+import os
+import uuid
+from datetime import datetime
+from typing import List
+from fastapi import FastAPI
+from pydantic import BaseModel
+from transformers import pipeline
 from supabase import create_client
 from dotenv import load_dotenv
-import os
+from vector_memory import store_embedding
+from api import memory  # Ensure this file exists: api/memory.py
 
-router = APIRouter()
+# Load environment variables
 load_dotenv()
-
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-@router.get("/dashboard/summary")
-def dashboard_summary():
-    # Fetch all predictions
-    pred_res = supabase.table("predictions").select("*").execute()
-    total_preds = len(pred_res.data) if pred_res.data else 0
+# FastAPI instance
+app = FastAPI()
+app.include_router(memory.router)
 
-    # Fetch all feedback scores
-    fb_res = supabase.table("feedback_score").select("*").execute()
-    total_fb = len(fb_res.data) if fb_res.data else 0
-    correct = sum(1 for row in fb_res.data if row.get("is_correct"))
-    accuracy = round((correct / total_fb) * 100, 2) if total_fb else 0
+# Sentiment classifier
+classifier = pipeline("sentiment-analysis", model="ProsusAI/finbert")
 
-    # Build summary response
-    return {
-        "total_predictions": total_preds,
-        "total_scored": total_fb,
-        "accuracy_percent": accuracy,
-        "last_loop_id": pred_res.data[-1]["loop_id"] if total_preds else None
-    }
+class Prediction(BaseModel):
+    asset: str
+    sentiment: str
+    score: float
+    timestamp: str
+    loop_id: str
+    source: str
+    tags: List[str]
+    raw_prompt: str
 
-@router.get("/dashboard/assets")
-def asset_stats(asset: str = Query(..., description="Asset symbol (e.g., AAPL)")):
-    # Fetch predictions for the asset
-    preds = supabase.table("feedback_score").select("*").eq("asset", asset).execute()
-    total = len(preds.data)
-    correct = sum(1 for row in preds.data if row.get("is_correct"))
-    accuracy = round((correct / total) * 100, 2) if total else 0
+def predict_sentiment(text: str):
+    result = classifier(text)[0]
+    return result
 
-    return {
-        "asset": asset.upper(),
-        "total_predictions": total,
-        "accuracy_percent": accuracy,
-        "last_prediction": preds.data[0] if preds.data else None
-    }
+def run_prediction_loop(assets: List[str]):
+    results = []
+    loop_id = str(uuid.uuid4())
 
-@router.get("/dashboard/loops")
-def loop_history(limit: int = 5):
-    # Fetch recent prediction loop IDs
-    loops = (
-        supabase.table("predictions")
-        .select("loop_id, timestamp")
-        .order("timestamp", desc=True)
-        .limit(limit)
-        .execute()
-    )
-    # De-duplicate by loop_id
-    loop_ids = list({row["loop_id"]: row for row in loops.data}.values())
-    return loop_ids
+    for asset in assets:
+        prompt = f"Latest financial news and analysis for {asset}."
+        sentiment = predict_sentiment(prompt)
+        result = {
+            "asset": asset,
+            "sentiment": sentiment["label"].lower(),
+            "score": round(sentiment["score"], 3),
+            "timestamp": datetime.utcnow().isoformat(),
+            "loop_id": loop_id,
+            "source": "FinBERT",
+            "tags": ["ai", "finance", asset.lower()],
+            "raw_prompt": prompt
+        }
+
+        # Save to Supabase
+        supabase.table("predictions").insert(result).execute()
+
+        # Store in vector DB
+        store_embedding(
+            doc_id=loop_id,
+            text=prompt,
+            metadata={
+                "asset": asset,
+                "sentiment": result["sentiment"],
+                "score": result["score"],
+                "loop_id": loop_id,
+                "timestamp": result["timestamp"],
+                "source": result["source"]
+            }
+        )
+
+        results.append(result)
+
+    return results
+
+@app.get("/predict", response_model=List[Prediction])
+def predict():
+    assets = ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
+    return run_prediction_loop(assets)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+

@@ -1,47 +1,69 @@
-# run_loop.py
-import yfinance as yf
-from transformers import pipeline
-from datetime import datetime
-import json
+import uuid
+import time
 import os
+from datetime import datetime, timedelta
+from AgentManager import AgentManager
+from feedback_score import score_prediction
+from memory_search import search_similar_vectors
+from vector_memory import save_vector
 
-ASSETS = ["AAPL", "MSFT", "TSLA", "NVDA", "GOOGL"]
-DATE = "2025-05-16"
+# === CONFIGURATION ===
+LOOP_INTERVAL_SECONDS = 10       # Delay between loops
+MEMORY_DIMENSION = 1536          # Vector size
+TRAIN_THRESHOLD = 0.85           # Score threshold for training
 
-# Load FinBERT model
-sentiment_model = pipeline("sentiment-analysis", model="ProsusAI/finbert")
+# === Utility: Get last valid weekday (Mon–Fri) ===
+def get_last_market_day():
+    today = datetime.utcnow().date()
+    while today.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+        today -= timedelta(days=1)
+    return today
 
-results = []
+# === Main Autonomous Loop ===
+def run_loop():
+    print("🚀 X1 Predict Autonomous Loop Started")
+    target_date = get_last_market_day()
+    print(f"📅 Using market date: {target_date}")
 
-print(f"\n🔁 Running X1 Prediction Loop for {DATE}...\n")
+    while True:
+        trace_id = str(uuid.uuid4())
+        print(f"\n🔁 New Run | Trace ID: {trace_id} | {datetime.utcnow().isoformat()}")
 
-for ticker in ASSETS:
-    print(f"📈 Fetching data for {ticker}...")
-    data = yf.download(ticker, start=DATE, end=DATE)
+        # STEP 1: Recall memory
+        query_vector = [0.1] * MEMORY_DIMENSION  # Replace with real signal if available
+        memory_hits = search_similar_vectors(query_vector)
+        print(f"🧠 Memory Hits: {len(memory_hits)}")
 
-    if data.empty:
-        print(f"⚠️ No data found for {ticker} on {DATE}. Skipping.\n")
-        continue
+        # STEP 2: Run agent with memory
+        agent = AgentManager(memory=memory_hits)
+        prediction = agent.run()
 
-    # Placeholder headline (normally this would be news sentiment)
-    headline = f"{ticker} closed on {DATE} amid market activity."
-    prediction = sentiment_model(headline)[0]
+        # STEP 3: Score prediction
+        score = score_prediction(prediction)
+        print(f"🎯 Feedback Score: {score:.3f}")
 
-    entry = {
-        "asset": ticker,
-        "date": DATE,
-        "headline": headline,
-        "sentiment": prediction['label'],
-        "confidence": round(prediction['score'], 4)
-    }
+        # STEP 4: Train memory if high score
+        if score >= TRAIN_THRESHOLD:
+            print("✅ High score — saving to memory.")
+            save_vector(
+                agent_id=agent.agent_id,
+                vector=prediction["vector"],
+                score_weights=prediction["score_weights"],
+                trained_from="autoloop",
+                trace_id=trace_id
+            )
+        else:
+            print("⚠️ Score below threshold — skipping memory save.")
 
-    print(f"✅ {ticker} → {entry['sentiment']} ({entry['confidence']})\n")
-    results.append(entry)
+        # STEP 5: Log result
+        os.makedirs("logs", exist_ok=True)
+        with open("logs/loop_log.txt", "a", encoding="utf-8") as log:
+            log.write(f"{datetime.utcnow().isoformat()}, {trace_id}, {score:.3f}, {prediction['decision']}\n")
 
-# Save log file
-os.makedirs("logs", exist_ok=True)
-log_file = f"logs/loop_{DATE.replace('-', '_')}.json"
-with open(log_file, "w") as f:
-    json.dump(results, f, indent=2)
+        # STEP 6: Wait for next cycle
+        print(f"⏱️ Sleeping for {LOOP_INTERVAL_SECONDS} seconds...\n")
+        time.sleep(LOOP_INTERVAL_SECONDS)
 
-print(f"✅ Loop complete. Log saved to {log_file}")
+if __name__ == "__main__":
+    run_loop()
+
