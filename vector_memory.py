@@ -26,12 +26,13 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 # ✅ Initialize Supabase client
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ✅ Correct function definition for your app
+# ✅ store_embedding() – accepts doc_id, text, metadata
 def store_embedding(*, doc_id, text, metadata):
     """
     Stores an embedding-like structure in Supabase.
     """
     data = {
+        "agent_id": "default-agent",  # ✅ FIX: required by your Supabase schema
         "trace_id": doc_id,
         "raw_text": text,
         "metadata": metadata,
@@ -44,6 +45,22 @@ def store_embedding(*, doc_id, text, metadata):
     except Exception as e:
         print("❌ Error storing embedding:", str(e))
 
+# ✅ query_embedding() – for vector search (required by memory.py)
+def query_embedding(query_vector, top_k=5):
+    """
+    Query memory_vectors table in Supabase using the match_vectors RPC.
+    Returns top_k most similar embeddings.
+    """
+    try:
+        result = supabase.rpc("match_vectors", {
+            "query_embedding": query_vector,
+            "match_count": top_k
+        }).execute()
+        print("🔍 Query result:", result.data)
+        return result.data
+    except Exception as e:
+        print("❌ Error querying embeddings:", str(e))
+        return []
 
 
 
