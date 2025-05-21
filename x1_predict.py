@@ -9,9 +9,9 @@ from supabase import create_client
 from dotenv import load_dotenv
 from pathlib import Path
 from vector_memory import store_embedding
-from api import memory  # Ensure this exists: api/memory.py
+# from api import memory  # 🔒 Temporarily disabled if api/memory.py is not ready
 
-# ✅ Load environment variables from the .env file in project root
+# ✅ Load environment variables
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
@@ -26,14 +26,14 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 # ✅ Initialize Supabase client
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ✅ Initialize FastAPI
+# ✅ Initialize FastAPI app
 app = FastAPI()
-app.include_router(memory.router)
+# app.include_router(memory.router)  # 🔒 Disabled temporarily
 
 # ✅ Load the FinBERT sentiment model
 classifier = pipeline("sentiment-analysis", model="ProsusAI/finbert")
 
-# ✅ Define the output model for prediction API
+# ✅ Define response model
 class Prediction(BaseModel):
     asset: str
     sentiment: str
@@ -44,12 +44,12 @@ class Prediction(BaseModel):
     tags: List[str]
     raw_prompt: str
 
-# ✅ Run a single prediction using FinBERT
+# ✅ Run one FinBERT prediction
 def predict_sentiment(text: str):
     result = classifier(text)[0]
     return result
 
-# ✅ Run predictions for a list of assets
+# ✅ Run prediction loop for multiple assets
 def run_prediction_loop(assets: List[str]):
     results = []
     loop_id = str(uuid.uuid4())
@@ -68,10 +68,10 @@ def run_prediction_loop(assets: List[str]):
             "raw_prompt": prompt
         }
 
-        # ✅ Save prediction to Supabase
+        # ✅ Store in Supabase
         supabase.table("predictions").insert(result).execute()
 
-        # ✅ Store embedding in vector DB
+        # ✅ Store in vector memory
         store_embedding(
             doc_id=loop_id,
             text=prompt,
@@ -95,10 +95,11 @@ def predict():
     assets = ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
     return run_prediction_loop(assets)
 
-# ✅ Local development entry point
+# ✅ Dev entry point
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("x1_predict:app", host="0.0.0.0", port=8000, reload=True)
+
 
 
 
