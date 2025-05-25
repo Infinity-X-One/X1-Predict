@@ -1,4 +1,4 @@
-// 📌 FinSynapse.ts - AI CEO Core Logic for Infinity X One
+// // 📌 FinSynapse.ts - AI CEO Core Logic for Infinity X One
 
 type CommandIntent = 'analyze' | 'predict' | 'optimize' | 'route' | 'audit' | 'reflect';
 
@@ -13,20 +13,13 @@ export class FinSynapse {
 
   static routeCommand(command: Command): string {
     switch (command.intent) {
-      case 'analyze':
-        return this.analyze(command.params);
-      case 'predict':
-        return this.predict(command.params);
-      case 'optimize':
-        return this.optimize(command.params);
-      case 'route':
-        return this.route(command.params);
-      case 'audit':
-        return this.audit(command.params);
-      case 'reflect':
-        return this.reflect(command.params);
-      default:
-        return 'FinSynapse: Unknown command intent.';
+      case 'analyze': return this.analyze(command.params);
+      case 'predict': return this.predict(command.params);
+      case 'optimize': return this.optimize(command.params);
+      case 'route': return this.route(command.params);
+      case 'audit': return this.audit(command.params);
+      case 'reflect': return this.reflect(command.params);
+      default: return 'FinSynapse: Unknown command intent.';
     }
   }
 
@@ -54,7 +47,6 @@ export class FinSynapse {
     return 'FinSynapse: Performing self-reflection...';
   }
 
-  // Optional: memory and logging support
   static store(key: string, value: any): void {
     this.memoryStore[key] = value;
   }
@@ -63,3 +55,4 @@ export class FinSynapse {
     return this.memoryStore[key];
   }
 }
+
