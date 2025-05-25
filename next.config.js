@@ -1,14 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
+    serverActions: {} // must be an object (NOT true/false)
+  }
 };
 
 module.exports = nextConfig;
-

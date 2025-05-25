@@ -1,80 +1,51 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-type Prediction = {
-  asset: string;
-  sentiment: string;
-  score: number;
-  timestamp: string;
-};
+import PromptBar from '@/components/PromptBar';
+import PortfolioPanel from '@/components/PortfolioPanel';
+import useUser from '@/hooks/useUser';
+import { fetchPrediction } from '@/lib/fetchPrediction';
+import { finSynapse } from '@/ai/FinSynapse';
 
 export default function DashboardPage() {
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/predict`);
-      if (!res.ok) throw new Error('Failed to fetch predictions');
-      const data = await res.json();
-      setPredictions(data);
-    } catch (err) {
-      console.error('Fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { user, loading, error } = useUser();
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // Auto-refresh every 60s
-    return () => clearInterval(interval);
+    const loadPrediction = async () => {
+      const data = await fetchPrediction();
+      if (!data) return;
+
+      const first = data[0];
+      const predictionMsg = finSynapse.receivePrediction(
+        first.asset,
+        first.score * 100, // Mock predicted price
+        100                // Static current price (for now)
+      );
+      setMessage(predictionMsg);
+    };
+
+    loadPrediction();
   }, []);
 
+  if (loading) return <p className="text-white p-8">🔄 Loading your session...</p>;
+  if (error) return <p className="text-red-500 p-8">❌ Error: {error.message}</p>;
+  if (!user) return <p className="text-yellow-400 p-8">🔒 Please sign in to access your dashboard.</p>;
+
   return (
-    <main className="p-8">
-      <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
-        📊 Prediction Dashboard
+    <main className="min-h-screen bg-black text-white p-8">
+      <h1 className="text-3xl font-bold mb-4">
+        👋 Welcome, {user.email?.split('@')[0]} — Your FinSynapse is Online.
       </h1>
 
-      <table className="w-full table-auto border border-gray-300 shadow">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="px-4 py-2 text-left">Asset</th>
-            <th className="px-4 py-2 text-left">Sentiment</th>
-            <th className="px-4 py-2 text-left">Score</th>
-            <th className="px-4 py-2 text-left">Timestamp</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <tr>
-              <td colSpan={4} className="text-center p-4">
-                Loading...
-              </td>
-            </tr>
-          ) : predictions.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="text-center p-4">
-                No data available.
-              </td>
-            </tr>
-          ) : (
-            predictions.map((p, i) => (
-              <tr key={i} className="border-t">
-                <td className="px-4 py-2 font-medium">{p.asset}</td>
-                <td className="px-4 py-2 capitalize">{p.sentiment}</td>
-                <td className="px-4 py-2">{(p.score * 100).toFixed(1)}%</td>
-                <td className="px-4 py-2">
-                  {new Date(p.timestamp).toLocaleString()}
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+      {message && (
+        <div className="bg-gray-800 p-4 rounded mb-4 text-green-400 text-sm shadow">
+          {message}
+        </div>
+      )}
+
+      <PromptBar />
+      <PortfolioPanel />
     </main>
   );
 }
-

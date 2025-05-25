@@ -1,57 +1,63 @@
-// 📌 FinSynapse.ts - AI CEO Core Logic for Infinity X One
-
-type CommandIntent = 'analyze' | 'predict' | 'optimize' | 'route' | 'audit' | 'reflect';
-
-interface Command {
-  origin: string;
-  intent: CommandIntent;
-  params?: Record<string, any>;
-}
-
+// src/ai/FinSynapse.ts
 export class FinSynapse {
-  private static memoryStore: Record<string, any> = {};
+  userName: string = "Founder";
+  predictionHistory: any[] = [];
+  portfolio: Record<string, number> = {};
+  paperBalance: number = 1000;
 
-  static routeCommand(command: Command): string {
-    switch (command.intent) {
-      case 'analyze': return this.analyze(command.params);
-      case 'predict': return this.predict(command.params);
-      case 'optimize': return this.optimize(command.params);
-      case 'route': return this.route(command.params);
-      case 'audit': return this.audit(command.params);
-      case 'reflect': return this.reflect(command.params);
-      default: return 'FinSynapse: Unknown command intent.';
+  constructor() {
+    console.log("🤖 FinSynapse Online - Agentic Mode Activated");
+  }
+
+  greetUser(): string {
+    return `Welcome back, ${this.userName}. I’m FinSynapse, your Agentic AI. Let's grow.`;
+  }
+
+  setUser(name: string) {
+    this.userName = name;
+  }
+
+  receivePrediction(asset: string, predictedPrice: number, currentPrice: number) {
+    const win = predictedPrice > currentPrice ? "Up" : "Down";
+    this.predictionHistory.push({ asset, predictedPrice, currentPrice, result: win });
+    return `📈 Prediction logged: ${asset} expected to go ${win}`;
+  }
+
+  makeDecision(currentPrice: number, predictedPrice: number): string {
+    const diff = predictedPrice - currentPrice;
+    if (Math.abs(diff) < 1) return "📊 Hold - Not enough movement.";
+    if (diff > 1) return "🟢 Buy - Strong upward signal.";
+    return "🔴 Sell - Downward signal expected.";
+  }
+
+  executePaperTrade(asset: string, amount: number, direction: "buy" | "sell") {
+    const value = amount;
+    if (direction === "buy") {
+      this.paperBalance -= value;
+      this.portfolio[asset] = (this.portfolio[asset] || 0) + amount;
+      return `🛒 Bought $${amount} of ${asset}. New balance: $${this.paperBalance.toFixed(2)}`;
+    } else {
+      const held = this.portfolio[asset] || 0;
+      const sellAmount = Math.min(held, amount);
+      this.paperBalance += sellAmount;
+      this.portfolio[asset] = held - sellAmount;
+      return `💸 Sold $${sellAmount} of ${asset}. New balance: $${this.paperBalance.toFixed(2)}`;
     }
   }
 
-  private static analyze(params?: any): string {
-    return 'FinSynapse: Analyzing data...';
+  report(): string {
+    return `📊 Portfolio Value: $${this.paperBalance.toFixed(2)} | Holdings: ${JSON.stringify(this.portfolio)}`;
   }
 
-  private static predict(params?: any): string {
-    return 'FinSynapse: Generating predictions...';
+  suggestAction(asset: string, predicted: number, current: number): string {
+    return this.makeDecision(current, predicted);
   }
 
-  private static optimize(params?: any): string {
-    return 'FinSynapse: Running optimization routines...';
-  }
-
-  private static route(params?: any): string {
-    return 'FinSynapse: Routing task...';
-  }
-
-  private static audit(params?: any): string {
-    return 'FinSynapse: Auditing system logic...';
-  }
-
-  private static reflect(params?: any): string {
-    return 'FinSynapse: Performing self-reflection...';
-  }
-
-  static store(key: string, value: any): void {
-    this.memoryStore[key] = value;
-  }
-
-  static recall(key: string): any {
-    return this.memoryStore[key];
+  getProof() {
+    return this.predictionHistory.slice(-5).map(p => (
+      `${p.asset}: Predicted $${p.predictedPrice} | Actual $${p.currentPrice} → ${p.result}`
+    )).join('\n');
   }
 }
+
+export const finSynapse = new FinSynapse();
