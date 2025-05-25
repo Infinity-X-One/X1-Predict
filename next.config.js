@@ -1,8 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverActions: {}, // ← valid object format
+
+module.exports = {
+  reactStrictMode: true,
+  images: {
+    domains: ['cdn.supabase.io', 'assets.vercel.com'],
   },
 }
-
-module.exports = nextConfig
