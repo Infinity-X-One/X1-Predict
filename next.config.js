@@ -1,7 +1,14 @@
-
-module.exports = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
-  images: {
-    domains: ['cdn.supabase.io', 'assets.vercel.com'],
+  swcMinify: true,
+  experimental: {
+    serverActions: true,
   },
-}
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  },
+};
+
+module.exports = nextConfig;
+
