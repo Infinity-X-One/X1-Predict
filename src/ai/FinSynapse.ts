@@ -1,4 +1,4 @@
-// // 📌 FinSynapse.ts - AI CEO Core Logic for Infinity X One
+// 📌 FinSynapse.ts - AI CEO Core Logic for Infinity X One
 
 type CommandIntent = 'analyze' | 'predict' | 'optimize' | 'route' | 'audit' | 'reflect';
 
@@ -55,4 +55,3 @@ export class FinSynapse {
     return this.memoryStore[key];
   }
 }
-
