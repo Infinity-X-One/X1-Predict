@@ -18,3 +18,8 @@ env/
 
 # Supabase CLI (if used later)
 .supabase/
+node_modules/
+.next/
+.env
+*.log
+.DS_Store
