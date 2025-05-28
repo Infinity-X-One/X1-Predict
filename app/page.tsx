@@ -2,14 +2,24 @@
 
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { AuthModal } from "@/components/auth-modal"
+import { useDemoAuth } from "@/contexts/demo-auth-context"
+import { DemoAuthModal } from "@/components/demo-auth-modal"
 import { useRouter } from "next/navigation"
 
 export default function MobilePage() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-  const { user, isLoading, signOut } = useAuth()
+  const { user, isLoading, signOut } = useDemoAuth()
   const router = useRouter()
+
+  const handleAuthClick = () => {
+    if (user) {
+      // If user is logged in, go directly to predict page
+      router.push("/predict")
+    } else {
+      // If not logged in, open auth modal
+      setIsAuthModalOpen(true)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 text-white relative overflow-hidden">
@@ -130,7 +140,7 @@ export default function MobilePage() {
           {!isLoading && user && (
             <div className="flex justify-center">
               <div className="w-full p-4 bg-slate-800/60 backdrop-blur-md border-2 border-green-400/30 rounded-xl text-center shadow-[0_0_25px_rgba(34,197,94,0.3)]">
-                <p className="text-green-300 mb-3 font-medium">Welcome back, {user.email?.split("@")[0]}!</p>
+                <p className="text-green-300 mb-3 font-medium">Welcome back, {user.displayName}!</p>
                 <div className="flex gap-3">
                   <Button
                     onClick={() => router.push("/predict")}
@@ -200,7 +210,7 @@ export default function MobilePage() {
       </div>
 
       {/* Auth Modal */}
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <DemoAuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   )
 }
