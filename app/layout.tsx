@@ -1,22 +1,22 @@
 import type React from "react"
+import "./globals.css"
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
-import "./globals.css"
-import { DemoAuthProvider } from "@/contexts/demo-auth-context"
+import { ThemeProvider } from "@/components/theme-provider"
+import OfflineIndicator from "./components/offline-indicator"
+import SwRegister from "./components/sw-register"
 
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  preload: true,
-})
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "X1 Predict - Mobile",
-  description: "X1 Predict Mobile Interface",
+  title: "X1 Predict - Futuristic Investment Dashboard",
+  description: "Powered by Agentic Intelligence",
+  manifest: "/manifest.json",
     generator: 'v0.dev'
 }
 
 export const viewport: Viewport = {
+  themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -25,21 +25,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
   return (
-    <html lang="en" className="h-full">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      </head>
-      <body className={`${inter.className} h-full overflow-x-hidden`}>
-        <DemoAuthProvider>
-          <div id="root" className="h-full">
-            {children}
-          </div>
-        </DemoAuthProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+          <SwRegister />
+          <OfflineIndicator />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -1,25 +1,10 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
-import { useDemoAuth } from "@/contexts/demo-auth-context"
-import { DemoAuthModal } from "@/components/demo-auth-modal"
 import { useRouter } from "next/navigation"
 
 export default function MobilePage() {
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-  const { user, isLoading, signOut } = useDemoAuth()
   const router = useRouter()
-
-  const handleAuthClick = () => {
-    if (user) {
-      // If user is logged in, go directly to predict page
-      router.push("/predict")
-    } else {
-      // If not logged in, open auth modal
-      setIsAuthModalOpen(true)
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 text-white relative overflow-hidden">
@@ -120,46 +105,6 @@ export default function MobilePage() {
             </div>
           </div>
 
-          {/* Sign In/Sign Up Button - Only show if not logged in */}
-          {!isLoading && !user && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => setIsAuthModalOpen(true)}
-                className="w-full h-14 bg-gradient-to-r from-blue-900 to-slate-900 backdrop-blur-md border-2 border-blue-400 text-white text-xl font-bold rounded-2xl hover:bg-gradient-to-r hover:from-blue-800 hover:to-slate-800 hover:border-blue-300 shadow-[0_0_25px_rgba(59,130,246,0.4)] hover:shadow-[0_0_35px_rgba(59,130,246,0.6)] transition-all duration-300 glassmorphic-phone-button flex items-center justify-center gap-3"
-              >
-                <span className="bg-gradient-to-r from-cyan-400 to-green-400 bg-clip-text text-transparent font-bold shimmer-text-subtle">
-                  Sign In / Sign Up
-                </span>
-              </Button>
-            </div>
-          )}
-
-          {/* User info if logged in */}
-          {!isLoading && user && (
-            <div className="flex justify-center">
-              <div className="w-full p-4 bg-slate-800/60 backdrop-blur-md border-2 border-green-400/30 rounded-xl text-center shadow-[0_0_25px_rgba(34,197,94,0.3)]">
-                <p className="text-green-300 mb-3 font-medium">Welcome back, {user.displayName}!</p>
-                <div className="flex gap-3">
-                  <Button
-                    onClick={() => router.push("/predict")}
-                    className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold rounded-xl border border-green-400/30"
-                  >
-                    Dashboard
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={signOut}
-                    className="px-4 border-2 border-green-400/30 text-green-400 hover:bg-green-400/10 rounded-xl"
-                  >
-                    Sign Out
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Action Buttons - Enhanced for Mobile */}
           <div className="space-y-3 flex flex-col items-center">
             <Button
@@ -208,9 +153,6 @@ export default function MobilePage() {
           </div>
         </div>
       </div>
-
-      {/* Auth Modal */}
-      <DemoAuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </div>
   )
 }
