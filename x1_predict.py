@@ -8,32 +8,41 @@ from transformers import pipeline
 from supabase import create_client
 from dotenv import load_dotenv
 from pathlib import Path
-from vector_memory import store_embedding
-# from api import memory  # 🔒 Temporarily disabled if api/memory.py is not ready
 
-# ✅ Load environment variables
+# ✅ Internal imports
+from vector_memory import store_embedding
+from api.reward_route import router as reward_router
+from api.opportunities_route import router as opportunities_router
+from api.metrics_route import router as metrics_router
+from api.trade_route import router as trade_router
+from api.proof_data_route import router as proof_data_router  # 🔁 Step 14.4
+
+# ✅ Load .env file
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-# ✅ Read Supabase credentials
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# ✅ Check that credentials were loaded
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ SUPABASE_URL or SUPABASE_KEY is missing from .env")
 
-# ✅ Initialize Supabase client
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ✅ Initialize FastAPI app
 app = FastAPI()
-# app.include_router(memory.router)  # 🔒 Disabled temporarily
 
-# ✅ Load the FinBERT sentiment model
+# ✅ Include API routers
+app.include_router(reward_router)
+app.include_router(opportunities_router)
+app.include_router(metrics_router)
+app.include_router(trade_router)
+app.include_router(proof_data_router)
+
+# ✅ Load FinBERT sentiment classifier
 classifier = pipeline("sentiment-analysis", model="ProsusAI/finbert")
 
-# ✅ Define response model
+# ✅ Pydantic model for output schema
 class Prediction(BaseModel):
     asset: str
     sentiment: str
@@ -44,12 +53,12 @@ class Prediction(BaseModel):
     tags: List[str]
     raw_prompt: str
 
-# ✅ Run one FinBERT prediction
+# ✅ Single prediction
 def predict_sentiment(text: str):
     result = classifier(text)[0]
     return result
 
-# ✅ Run prediction loop for multiple assets
+# ✅ Batch prediction + DB insert + embedding
 def run_prediction_loop(assets: List[str]):
     results = []
     loop_id = str(uuid.uuid4())
@@ -89,17 +98,13 @@ def run_prediction_loop(assets: List[str]):
 
     return results
 
-# ✅ API route for /predict
+# ✅ /predict endpoint
 @app.get("/predict", response_model=List[Prediction])
 def predict():
     assets = ["AAPL", "TSLA", "MSFT", "BTC", "ETH"]
     return run_prediction_loop(assets)
 
-# ✅ Dev entry point
+# ✅ Dev server entrypoint
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("x1_predict:app", host="0.0.0.0", port=8000, reload=True)
-
-
-
-

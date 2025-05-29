@@ -1,23 +1,60 @@
-import time
-import subprocess
+# feedback_cron.py
+
+import os
 from datetime import datetime
+from supabase import create_client
+from transformers import pipeline
+from dotenv import load_dotenv
+from pathlib import Path
 
-# === SETTINGS ===
-INTERVAL_MINUTES = 15  # Change to desired interval (e.g., 5, 10, 30)
+# ✅ Load environment
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
-def run_feedback_scoring():
-    print(f"🔁 Running feedback_score.py at {datetime.utcnow().isoformat()}...")
-    result = subprocess.run(["python", "feedback_score.py"], capture_output=True, text=True)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    if result.returncode == 0:
-        print("✅ Feedback scoring completed successfully.")
-    else:
-        print("❌ Error running feedback scoring:")
-        print(result.stderr)
+# ✅ Load FinBERT model
+classifier = pipeline("sentiment-analysis", model="ProsusAI/finbert")
+
+def run_feedback_loop():
+    trades = supabase.table("simulated_trades").select("*").execute().data
+
+    for trade in trades:
+        asset = trade["asset"]
+        trade_id = trade.get("id")
+        user_id = trade["user_id"]
+        direction = trade["direction"]
+        timestamp = trade["timestamp"]
+        original_confidence = trade["confidence"]
+
+        prompt = f"Recent market data for {asset} suggests?"
+        result = classifier(prompt)[0]
+        new_sentiment = result["label"].lower()
+        new_score = round(result["score"], 4)
+
+        was_right = (
+            (direction == "buy" and new_sentiment == "positive") or
+            (direction == "short" and new_sentiment == "negative")
+        )
+
+        feedback = {
+            "trade_id": trade_id,
+            "user_id": user_id,
+            "asset": asset,
+            "direction": direction,
+            "initial_confidence": original_confidence,
+            "new_sentiment": new_sentiment,
+            "new_score": new_score,
+            "was_correct": was_right,
+            "evaluated_at": datetime.utcnow().isoformat()
+        }
+
+        supabase.table("feedback_log").insert(feedback).execute()
+
+    print("✅ Feedback loop completed")
 
 if __name__ == "__main__":
-    print("🧠 Starting Feedback CRON Loop...")
-    while True:
-        run_feedback_scoring()
-        print(f"⏳ Sleeping for {INTERVAL_MINUTES} minutes...\n")
-        time.sleep(INTERVAL_MINUTES * 60)
+    run_feedback_loop()
+

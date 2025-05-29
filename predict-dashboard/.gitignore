@@ -38,4 +38,27 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+next-env.*
+
+# Bytecode & cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+
+# VS Code
+.vscode/
+
+# Supabase CLI (if used later)
+.supabase/
+node_modules/
+.next/
+.env
+*.log
+.DS_Store
